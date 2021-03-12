@@ -1,0 +1,175 @@
+---
+version: '3.7'
+services:
+  sqlwp:
+    image: mariadb:10.5
+    networks:
+      - backend
+    volumes:
+      - ./conf/custom-mysql.cnf:/etc/mysql/conf.d/custom-mysql.cnf
+      - datasqlwp:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "sqlrootpassword"
+      MYSQL_USER: "sqlusername"
+      MYSQL_PASSWORD: "sqluserpassword"
+      MYSQL_DATABASE: "sqldatabasename"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+  sqlexporterwp:
+    image: prom/mysqld-exporter
+    networks:
+      - backend
+      - monitoring
+    environment:
+      DATA_SOURCE_NAME: root:sqlrootpassword@(sqlwp:3306)/sqldatabasename
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 24M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+  redis:
+    image: redis:6.2-alpine
+    networks:
+      - monitoring
+      - backend
+    command:
+      - 'redis-server'
+      - '--maxmemory 256mb'
+      - '--maxmemory-policy allkeys-lru'
+      - '--requirepass redispassword'
+      - '--appendonly yes'
+    volumes:
+      - dataredis:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  wpfpm:
+    image: wordpress:5.7-php7.4-fpm
+    networks:
+      - backend
+    volumes:
+      - ./conf/php.ini:/usr/local/etc/php/conf.d/custom.ini
+      - datawpfpm:/var/www/html
+      - ./conf/robots.txt:/var/www/html/robots.txt
+    environment:
+      WORDPRESS_DB_HOST: "sqlwp"
+      WORDPRESS_DB_USER: "sqlusername"
+      WORDPRESS_DB_PASSWORD: "sqluserpassword"
+      WORDPRESS_DB_NAME: "sqldatabasename"
+      WORDPRESS_TABLE_PREFIX: "sqlprefix_"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+  nginxwp:
+    image: nginx:1.19
+    networks:
+      - oueb
+      - backend
+    volumes:
+      - datawpfpm:/var/www/html
+      - ./conf/robots.txt:/var/www/html/robots.txt
+      - ./logs/nginxwp:/var/log/nginx/
+      - ./conf/nginx-wp:/etc/nginx/
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 64M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+
+  nginxexporterwp:
+    image: nginx/nginx-prometheus-exporter
+    networks:
+      - backend
+      - monitoring
+    command:
+      - '-nginx.scrape-uri=http://nginxwp:8000/nginx_status'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 24M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+#################################################################################
+volumes:
+  dataredis:
+  datasqlwp:
+  datawpfpm:
+
+#################################################################################
+networks:
+  oueb:
+    external: true
+    name: oueb
+
+  backend:
+    external: true
+    name: backend
+
+  monitoring:
+    external: true
+    name: monitoring

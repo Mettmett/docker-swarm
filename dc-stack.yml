@@ -1,0 +1,78 @@
+---
+version: '3.7'
+services:
+  traefik:
+    image: traefik:livarot
+    networks:
+      - bridge
+      - oueb
+      - backend
+      - monitoring
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./conf/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./conf/traefikdynamic:/etc/traefik/dynamic
+      - ./conf/acme.json:/acme.json
+      - ./logs/traefik.log:/etc/traefik/applog.log
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 96M
+        reservations:
+          cpus: '0.1'
+          memory: 48M
+
+  portainer:
+    image: portainer/portainer-ce:2.1.1
+    command: -H unix:///var/run/docker.sock
+    networks:
+      - backend
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - dataportainer:/data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 32M
+        reservations:
+          cpus: '0.02'
+          memory: 24M
+
+volumes:
+  dataredis:
+  dataportainer:
+
+#################################################################################
+networks:
+  bridge:
+    external: true
+    name: bridge
+
+  oueb:
+    external: true
+    name: oueb
+
+  backend:
+    external: true
+    name: backend
+
+  monitoring:
+    external: true
+    name: monitoring

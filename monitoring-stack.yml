@@ -1,0 +1,117 @@
+---
+version: '3.7'
+services:
+  prometheus:
+    image: prom/prometheus:v2.25.0
+    networks:
+      - monitoring
+    volumes:
+      - ./conf/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./conf/prometheus/rules.yml:/etc/prometheus/rules.yml
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 128M
+        reservations:
+          cpus: '0.02'
+          memory: 48M
+
+  nodeexporter:
+    image: prom/node-exporter:v1.1.2
+    networks:
+      - monitoring
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.processes
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 24M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    networks:
+      - monitoring
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 48M
+
+  grafana:
+    image: grafana/grafana:7.4.3
+    networks:
+      - oueb
+      - monitoring
+    environment:
+      - "GF_INSTALL_PLUGINS=redis-datasource"
+      - "GF_USERS_ALLOW_SIGN_UP=false"
+    volumes:
+      - ./conf/grafana/provisioning.yml:/etc/grafana/provisioning/datasources/all.yml
+      - datagrafana:/var/lib/grafana
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 128M
+        reservations:
+          cpus: '0.01'
+          memory: 64M
+
+#################################################################################
+volumes:
+  datagrafana:
+
+#################################################################################
+networks:
+  oueb:
+    external: true
+    name: oueb
+
+  monitoring:
+    external: true
+    name: monitoring

@@ -1,0 +1,41 @@
+---
+global:
+  scrape_interval:     15s # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s # Evaluate rules every 15 seconds. The default is every 1 minute.
+  # scrape_timeout is set to the global default (10s).
+
+rule_files:
+  - "rules.yml"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "cAdvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  - job_name: "nodeExporter"
+    static_configs:
+      - targets: ["nodeexporter:9100"]
+
+  - job_name: "nginxExporterWP"
+    static_configs:
+      - targets: ["nginxexporterwp:9113"]
+
+  - job_name: "nginxExporterMatomo"
+    static_configs:
+      - targets: ["nginxexportermatomo:9113"]
+
+  - job_name: "sqlExporterWP"
+    static_configs:
+      - targets: ["sqlexporterwp:9104"]
+
+  - job_name: "sqlExporterMatomo"
+    static_configs:
+      - targets: ["sqlexportermatomo:9104"]
+
+  - job_name: 'traefik'
+    static_configs:
+      - targets: ['traefik:9090']

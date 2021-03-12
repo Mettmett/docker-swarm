@@ -1,0 +1,144 @@
+---
+version: '3.7'
+services:
+  nginxmatomo:
+    image: nginx:1.19
+    networks:
+      - oueb
+      - backend
+    volumes:
+      - datamatomo:/var/www/html
+      - ./logs/nginxmatomo:/var/log/nginx/
+      - ./conf/nginx-matomo:/etc/nginx/
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 64M
+        reservations:
+          cpus: '0.05'
+          memory: 24M
+
+  nginxexportermatomo:
+    image: nginx/nginx-prometheus-exporter
+    networks:
+      - monitoring
+      - backend
+    command:
+      - '-nginx.scrape-uri=http://nginxmatomo:8000/nginx_status'
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 24M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+  sqlmatomo:
+    image: mariadb:10.5
+    networks:
+      - backend
+    volumes:
+      - ./conf/custom-mysql.cnf:/etc/mysql/conf.d/custom-mysql.cnf
+      - datasqlmatomo:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: "sqlrootpassword"
+      MYSQL_USER: "sqlusername"
+      MYSQL_PASSWORD: "sqluserpassword"
+      MYSQL_DATABASE: "sqldatabasename"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 64M
+
+  sqlexportermatomo:
+    image: prom/mysqld-exporter
+    networks:
+      - backend
+      - monitoring
+    environment:
+      DATA_SOURCE_NAME: root:sqlrootpassword@(sqlmatomo:3306)/sqldatabasename
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: 24M
+        reservations:
+          cpus: '0.02'
+          memory: 16M
+
+  matomoapp:
+    image: matomo:4.2-fpm
+    networks:
+      - backend
+    environment:
+      MATOMO_DATABASE_HOST: sqlmatomo
+      MATOMO_DATABASE_TABLES_PREFIX: "sqlprefix_"
+      MATOMO_DATABASE_USERNAME: "sqlusername"
+      MATOMO_DATABASE_PASSWORD: "sqluserpassword"
+      MATOMO_DATABASE_DBNAME: "sqldatabasename"
+    volumes:
+      - datamatomo:/var/www/html
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 2s
+        max_attempts: 3
+        window: 30s
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+
+#################################################################################
+volumes:
+  datasqlmatomo:
+  datamatomo:
+  datanginxlogsmatomo:
+
+#################################################################################
+networks:
+  oueb:
+    external: true
+    name: oueb
+
+  backend:
+    external: true
+    name: backend
+
+  monitoring:
+    external: true
+    name: monitoring
